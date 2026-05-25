@@ -1,0 +1,32 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    env_file:
+      - .env
+    environment:
+      PORT: ${BACKEND_PORT:-8000}
+      HOST: ${APP_HOST:-0.0.0.0}
+      LOG_FILE: ${LOG_FILE:-/app/backend/logs/app.log}
+    ports:
+      - "${BACKEND_PORT:-8000}:${BACKEND_PORT:-8000}"
+    volumes:
+      - ./backend/logs:/app/backend/logs
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    env_file:
+      - .env
+    environment:
+      PORT: ${FRONTEND_PORT:-5173}
+      HOST: ${APP_HOST:-0.0.0.0}
+      BACKEND_URL: ${BACKEND_URL:-http://localhost:8000}
+    ports:
+      - "${FRONTEND_PORT:-5173}:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
