@@ -3,3 +3,6 @@ onnx
 tqdm
 jupyter
 ipykernel
+pillow
+requests
+numpy
