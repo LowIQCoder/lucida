@@ -6,7 +6,6 @@ COPY frontend/package*.json ./
 RUN npm ci
 
 COPY frontend ./
-COPY ml ../ml
 
 RUN mkdir -p dist \
   && cp index.html dist/index.html \
@@ -16,7 +15,6 @@ RUN mkdir -p dist \
 FROM nginx:alpine
 
 COPY --from=build /app/frontend/dist /usr/share/nginx/html
-COPY --from=build /app/ml /usr/share/nginx/html/ml
 
 ENV BACKEND_URL=http://localhost:8000
 
