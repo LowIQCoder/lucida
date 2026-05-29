@@ -1,7 +1,7 @@
 import { predictParams } from "./lib/model.js";
 import { applyCorrection } from "./lib/pixels.js";
 
-const PREVIEW_SIZE = 224;
+const PREVIEW_SIZE = 256;
 
 const app = document.querySelector("#app");
 
