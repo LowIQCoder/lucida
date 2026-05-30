@@ -2,8 +2,8 @@ import { getModelConfig, predictParams, preloadModel } from "./lib/model.js";
 import { applyCorrection } from "./lib/pixels.js";
 import { rgbToResizedTensor } from "./lib/preprocess.js";
 
-const DEMO_ORIGINAL = "/src/assets/demo-original.png";
-const DEMO_ENHANCED = "/src/assets/demo-enhanced.png";
+const DEMO_ORIGINAL = "/src/assets/demo-original.jpg";
+const DEMO_ENHANCED = "/src/assets/demo-enhanced.jpg";
 const MODEL_DIAGRAM = String.raw`flowchart LR
     image["HSV image<br/>B x 3 x 256 x 256"]
     stats["stats<br/>B x 18"]
