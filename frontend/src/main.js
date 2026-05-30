@@ -9,82 +9,7 @@ const CORRUPTION_EXAMPLES = [
   { label: "Medium corruption", image: "/src/assets/demo-corrupted2.jpg" },
   { label: "High corruption", image: "/src/assets/demo-corrupted3.jpg" }
 ];
-const MODEL_DIAGRAM = String.raw`flowchart LR
-    image["HSV image<br/>B x 3 x 256 x 256"]
-    stats["stats<br/>B x 18"]
-    norm["normalize<br/>(image - 0.5) / 0.5"]
-
-    image --> norm
-
-    subgraph encoder["CNN encoder"]
-        direction LR
-        l1["Level 1<br/>Conv 3x3 stride 2: HSV 3 to 32<br/>BatchNorm + ReLU<br/>ResidualConvBlock 32<br/>B x 32 x 128 x 128"]
-        l2["Level 2<br/>Conv 3x3 stride 2: 32 to 64<br/>BatchNorm + ReLU<br/>ResidualConvBlock 64<br/>add proj r1<br/>B x 64 x 64 x 64"]
-        l3["Level 3<br/>Conv 3x3 stride 2: 64 to 128<br/>BatchNorm + ReLU<br/>ResidualConvBlock 128<br/>add proj r1 and r2<br/>B x 128 x 32 x 32"]
-        l4["Level 4<br/>Conv 3x3 stride 2: 128 to 192<br/>BatchNorm + ReLU<br/>ResidualConvBlock 192<br/>add proj r1 r2 r3<br/>B x 192 x 16 x 16"]
-        l5["Level 5<br/>Conv 3x3 stride 2: 192 to 256<br/>BatchNorm + ReLU<br/>ResidualConvBlock 256<br/>add proj r1 r2 r3 r4<br/>B x 256 x 8 x 8"]
-    end
-
-    norm --> l1 --> l2 --> l3 --> l4 --> l5
-
-    p1["pool L1<br/>Linear 32 to 32<br/>r1"]
-    p2["pool L2<br/>Linear 64 to 32<br/>r2"]
-    p3["pool L3<br/>Linear 128 to 32<br/>r3"]
-    p4["pool L4<br/>Linear 192 to 32<br/>r4"]
-    p5["pool L5<br/>Linear 256 to 32<br/>r5"]
-
-    l1 --> p1
-    l2 --> p2
-    l3 --> p3
-    l4 --> p4
-    l5 --> p5
-
-    p1 -.-> l2
-    p1 -.-> l3
-    p1 -.-> l4
-    p1 -.-> l5
-    p2 -.-> l3
-    p2 -.-> l4
-    p2 -.-> l5
-    p3 -.-> l4
-    p3 -.-> l5
-    p4 -.-> l5
-
-    finalPool["final pool<br/>AdaptiveAvgPool2d 1<br/>flatten: B x 256"]
-    concat["concat<br/>final pool B x 256<br/>stats B x 18<br/>r1..r5 B x 160<br/>total B x 434"]
-
-    l5 --> finalPool --> concat
-    stats --> concat
-    p1 --> concat
-    p2 --> concat
-    p3 --> concat
-    p4 --> concat
-    p5 --> concat
-
-    subgraph head["MLP head"]
-        direction LR
-        h1["Linear<br/>434 to 128"]
-        h2["ReLU"]
-        h3["Dropout<br/>p = 0.15"]
-        h4["Linear<br/>128 to 3"]
-    end
-
-    concat --> h1 --> h2 --> h3 --> h4
-    neutral["add neutral<br/>0.0 1.0 1.0"]
-    output["params<br/>brightness contrast saturation"]
-    h4 --> neutral --> output
-
-    classDef inputNode fill:#d9e9ff,stroke:#3577c8,stroke-width:2px,color:#172033;
-    classDef conv fill:#def4e7,stroke:#2f8f5b,stroke-width:2px,color:#172033;
-    classDef residual fill:#fff0d8,stroke:#c87919,stroke-width:2px,color:#172033;
-    classDef headNode fill:#eadfff,stroke:#7957c8,stroke-width:2px,color:#172033;
-    classDef outputNode fill:#def4e7,stroke:#2f8f5b,stroke-width:2px,color:#172033;
-
-    class image,stats inputNode;
-    class l1,l2,l3,l4,l5 conv;
-    class p1,p2,p3,p4,p5,neutral residual;
-    class concat,h1,h2,h3,h4 headNode;
-    class output outputNode;`;
+const MAX_OUTPUT_PIXELS = 3_000_000;
 
 const app = document.querySelector("#app");
 
@@ -212,10 +137,12 @@ function renderWorkPage() {
       <section class="work-section">
         <div class="section-head">
           <p class="eyebrow">Model architecture</p>
-          <h2>CNN encoder combines HSV image features with handcrafted stats.</h2>
+          <h2>CNN encoder combines RGB image features with handcrafted stats.</h2>
         </div>
-        <div class="mermaid-card">
-          <pre class="mermaid">${escapeHtml(MODEL_DIAGRAM)}</pre>
+        <div class="arch-grid">
+          <article><span>01</span><h3>Image encoder</h3><p>Downsampled RGB image passes through compact CNN blocks.</p></article>
+          <article><span>02</span><h3>Stats branch</h3><p>Mean, variance, min, and max values add global color context.</p></article>
+          <article><span>03</span><h3>MLP head</h3><p>Head predicts brightness, contrast, and saturation parameters.</p></article>
         </div>
       </section>
 
@@ -245,8 +172,6 @@ function renderWorkPage() {
       ${footer()}
     </main>
   `;
-
-  renderMermaid();
 }
 
 function renderEnhancePage() {
@@ -326,30 +251,6 @@ function nav(active) {
   `;
 }
 
-function renderMermaid() {
-  const mermaid = globalThis.mermaid;
-  if (!mermaid) return;
-  mermaid.initialize({
-    startOnLoad: false,
-    securityLevel: "loose",
-    theme: "base",
-    themeVariables: {
-      fontFamily: "Inter, ui-sans-serif, system-ui",
-      primaryColor: "#def4e7",
-      lineColor: "#536158",
-      textColor: "#172033"
-    }
-  });
-  mermaid.run({ querySelector: ".mermaid" });
-}
-
-function escapeHtml(value) {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;");
-}
-
 function footer() {
   return `
     <footer class="footer">
@@ -371,7 +272,7 @@ async function handleTry() {
   const button = document.querySelector("#tryButton");
   const status = document.querySelector("#tryStatus");
   button.disabled = true;
-  status.textContent = "Downloading model...";
+  status.textContent = "Checking model...";
 
   try {
     await preloadModel();
@@ -428,22 +329,24 @@ async function processFile(file) {
   busy = true;
   resetUi();
   const startedAt = performance.now();
+  let bitmap;
 
   try {
     originalUrl = URL.createObjectURL(file);
     document.querySelector("#before").src = originalUrl;
+    const modelReady = preloadModel();
 
     setStatus("decoding", 10);
-    const bitmap = await createImageBitmap(file);
+    bitmap = await createImageBitmap(file);
 
     setStatus("model inference", 35);
     const modelConfig = await getModelConfig();
     const preview = makePreview(bitmap, modelConfig);
+    await modelReady;
     const params = await predictParams(preview);
 
     setStatus("enhancing", 70);
     const blob = await enhanceBitmap(bitmap, params);
-    bitmap.close();
 
     resultUrl = URL.createObjectURL(blob);
     const download = document.querySelector("#download");
@@ -461,6 +364,7 @@ async function processFile(file) {
   } catch (error) {
     document.querySelector("#status").textContent = error instanceof Error ? error.message : String(error);
   } finally {
+    bitmap?.close();
     busy = false;
   }
 }
@@ -468,24 +372,24 @@ async function processFile(file) {
 function makePreview(bitmap, modelConfig) {
   const size = modelConfig.input_image_size;
   const canvas = document.createElement("canvas");
-  canvas.width = bitmap.width;
-  canvas.height = bitmap.height;
+  canvas.width = size;
+  canvas.height = size;
   const context = getContext(canvas);
-  context.drawImage(bitmap, 0, 0);
-  const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+  context.drawImage(bitmap, 0, 0, size, size);
   return {
     width: size,
     height: size,
-    tensor: rgbToResizedTensor(imageData, size, size, modelConfig)
+    tensor: rgbToResizedTensor(context.getImageData(0, 0, size, size), size, size)
   };
 }
 
 async function enhanceBitmap(bitmap, params) {
+  const scale = Math.min(1, Math.sqrt(MAX_OUTPUT_PIXELS / (bitmap.width * bitmap.height)));
   const canvas = document.createElement("canvas");
-  canvas.width = bitmap.width;
-  canvas.height = bitmap.height;
+  canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+  canvas.height = Math.max(1, Math.round(bitmap.height * scale));
   const context = getContext(canvas);
-  context.drawImage(bitmap, 0, 0);
+  context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
   const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
   applyCorrection(imageData.data, params);
   context.putImageData(imageData, 0, 0);

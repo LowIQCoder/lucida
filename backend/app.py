@@ -57,6 +57,19 @@ def checkpoint(model_id: str):
     return checkpoint_response(checkpoint_data)
 
 
+@app.get("/api/checkpoint/{model_id}/config")
+def checkpoint_config(model_id: str):
+    """Return model config without loading model bytes in the browser."""
+    try:
+        checkpoint_data = checkpoint_repository.get(model_id)
+    except CheckpointNotFoundError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except InvalidCheckpointConfigError as error:
+        raise HTTPException(status_code=500, detail=str(error)) from error
+
+    return checkpoint_data.config.model_dump()
+
+
 @app.get("/api/health")
 def health():
     """Return backend health status."""
