@@ -1,6 +1,7 @@
 import { getModelConfig, predictParams, preloadModel } from "./lib/model.js";
 import { applyCorrection } from "./lib/pixels.js";
 import { rgbToResizedTensor } from "./lib/preprocess.js";
+import { decodeHeic, isHeic } from "./lib/heic.js";
 
 const DEMO_ORIGINAL = "/src/assets/demo-original.jpg";
 const DEMO_ENHANCED = "/src/assets/demo-enhanced.jpg";
@@ -10,6 +11,7 @@ const CORRUPTION_EXAMPLES = [
   { label: "High corruption", image: "/src/assets/demo-corrupted3.jpg" }
 ];
 const MAX_OUTPUT_PIXELS = 3_000_000;
+const ACCEPTED_IMAGES = "image/jpeg,image/png,image/bmp,image/webp,image/heic,image/heif,.heic,.heif";
 
 const app = document.querySelector("#app");
 
@@ -188,7 +190,7 @@ function renderEnhancePage() {
             <label class="upload-button" title="Choose image">
               <span aria-hidden="true">+</span>
               <span>Choose image</span>
-              <input id="file" type="file" accept="image/jpeg,image/png,image/bmp,image/webp" />
+              <input id="file" type="file" accept="${ACCEPTED_IMAGES}" />
             </label>
           </header>
 
@@ -310,7 +312,7 @@ function setupDropZone() {
   });
 
   dropZone.addEventListener("drop", async (event) => {
-    const file = [...event.dataTransfer.files].find((item) => item.type.startsWith("image/"));
+    const file = [...event.dataTransfer.files].find(isSupportedImage);
     if (!file) {
       setStatus("drop image file", 0);
       return;
@@ -321,7 +323,7 @@ function setupDropZone() {
 
 async function processFile(file) {
   if (!file || busy) return;
-  if (!file.type.startsWith("image/")) {
+  if (!isSupportedImage(file)) {
     setStatus("unsupported file", 0);
     return;
   }
@@ -332,12 +334,14 @@ async function processFile(file) {
   let bitmap;
 
   try {
-    originalUrl = URL.createObjectURL(file);
-    document.querySelector("#before").src = originalUrl;
     const modelReady = preloadModel();
+    const source = await toBrowserImage(file);
+
+    originalUrl = URL.createObjectURL(source);
+    document.querySelector("#before").src = originalUrl;
 
     setStatus("decoding", 10);
-    bitmap = await createImageBitmap(file);
+    bitmap = await createImageBitmap(source);
 
     setStatus("model inference", 35);
     const modelConfig = await getModelConfig();
@@ -367,6 +371,16 @@ async function processFile(file) {
     bitmap?.close();
     busy = false;
   }
+}
+
+async function toBrowserImage(file) {
+  if (!isHeic(file)) return file;
+  setStatus("converting HEIC", 5);
+  return decodeHeic(file);
+}
+
+function isSupportedImage(file) {
+  return file.type.startsWith("image/") || isHeic(file);
 }
 
 function makePreview(bitmap, modelConfig) {

@@ -2,14 +2,17 @@ import { imageDataToTensor } from "./preprocess.js";
 
 const CONFIG_URL = "/api/checkpoint/latest/config";
 let configPromise;
+let worker;
+let nextId = 1;
+const pending = new Map();
 
 export async function predictParams(imageData) {
   const tensor = imageDataToTensor(imageData);
-  return runWorker(tensor, imageData.width, imageData.height);
+  return workerRequest("predict", { tensor, width: imageData.width, height: imageData.height }, [tensor.buffer]);
 }
 
 export async function preloadModel() {
-  await getModelConfig();
+  await Promise.all([getModelConfig(), workerRequest("preload")]);
 }
 
 export async function getModelConfig() {
@@ -22,20 +25,34 @@ export async function getModelConfig() {
   return configPromise;
 }
 
-function runWorker(tensor, width, height) {
+function workerRequest(type, payload = {}, transfer = []) {
+  const id = nextId++;
+  const activeWorker = getWorker();
+
   return new Promise((resolve, reject) => {
-    const worker = new Worker(new URL("./modelWorker.js", import.meta.url));
-    worker.onmessage = ({ data }) => {
-      worker.terminate();
-      if (data.ok) resolve(data.params);
-      else reject(new Error(data.error));
-    };
-    worker.onerror = (error) => {
-      worker.terminate();
-      reject(error.error || new Error(error.message));
-    };
-    worker.postMessage({ tensor, width, height }, [tensor.buffer]);
+    pending.set(id, { resolve, reject });
+    activeWorker.postMessage({ id, type, ...payload }, transfer);
   });
+}
+
+function getWorker() {
+  if (worker) return worker;
+
+  worker = new Worker(new URL("./modelWorker.js", import.meta.url));
+  worker.onmessage = ({ data }) => {
+    const request = pending.get(data.id);
+    if (!request) return;
+    pending.delete(data.id);
+    if (data.ok) request.resolve(data.params);
+    else request.reject(new Error(data.error));
+  };
+  worker.onerror = (error) => {
+    for (const request of pending.values()) request.reject(error.error || new Error(error.message));
+    pending.clear();
+    worker.terminate();
+    worker = undefined;
+  };
+  return worker;
 }
 
 function normalizeModelConfig(config) {
