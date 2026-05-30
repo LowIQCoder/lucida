@@ -4,6 +4,11 @@ import { rgbToResizedTensor } from "./lib/preprocess.js";
 
 const DEMO_ORIGINAL = "/src/assets/demo-original.jpg";
 const DEMO_ENHANCED = "/src/assets/demo-enhanced.jpg";
+const CORRUPTION_EXAMPLES = [
+  { label: "Small corruption", image: "/src/assets/demo-corrupted1.jpg" },
+  { label: "Medium corruption", image: "/src/assets/demo-corrupted2.jpg" },
+  { label: "High corruption", image: "/src/assets/demo-corrupted3.jpg" }
+];
 const MODEL_DIAGRAM = String.raw`flowchart LR
     image["HSV image<br/>B x 3 x 256 x 256"]
     stats["stats<br/>B x 18"]
@@ -108,12 +113,12 @@ function renderAboutPage() {
       ${nav("about")}
       <section class="about-hero">
         <div class="hero-copy">
-          <p class="eyebrow">Browser ONNX image enhancer</p>
-          <h1>Recover light, color, and texture without sending photos away.</h1>
-          <p class="lead">Small CNN predicts brightness, contrast, and saturation values in browser. Backend serves checkpoints and logs sessions; image pixels stay local.</p>
+          <p class="eyebrow">VK Practice Project</p>
+          <h1>Recover brightness, saturation and contrast of an image</h1>
+          <p class="lead">Small CNN predicts brightness, contrast, and saturation values in fully locally in your browser browser!</p>
           <div class="hero-actions">
             <button id="tryButton" class="primary-action">Try yourself</button>
-            <span id="tryStatus" class="try-status">Model ready on demand</span>
+            <span id="tryStatus" class="try-status">Tap to load model and test!</span>
           </div>
         </div>
         <div class="compare-card">
@@ -150,7 +155,7 @@ function renderAboutPage() {
           <article class="flow-step">
             <span>04</span>
             <h3>Final image</h3>
-            <p>Download JPEG result with predicted brightness, contrast, and saturation correction applied.</p>
+            <p>Download generated result with enhanced brightness, contrast, and saturation.</p>
           </article>
         </div>
       </section>
@@ -171,14 +176,22 @@ function renderWorkPage() {
       ${nav("work")}
       <section class="work-hero">
         <p class="eyebrow">Project work</p>
-        <h1>Dataset, model, and app architecture.</h1>
-        <p class="lead">This page describes what was built: data generation, CNN model, ONNX checkpoint delivery, and browser-side enhancement pipeline.</p>
+        <h1>DWhat  have been done</h1>
+        <p class="lead">This page describes what was built: data generation, CNN model, checkpoint delivery, and browser-side enhancement pipeline.</p>
       </section>
 
       <section class="work-section two-column-section">
         <div>
           <p class="eyebrow">Dataset description</p>
           <h2>Original images plus synthetic corruption.</h2>
+          <div class="corruption-examples">
+            ${CORRUPTION_EXAMPLES.map((example) => `
+              <figure>
+                <img src="${example.image}" alt="${example.label} example" />
+                <figcaption>${example.label}</figcaption>
+              </figure>
+            `).join("")}
+          </div>
         </div>
         <div class="info-list">
           <article>
@@ -245,7 +258,7 @@ function renderEnhancePage() {
           <header class="studio-head">
             <div>
               <p class="eyebrow">Enhancing workspace</p>
-              <h1>Drop one photo, get browser-local correction.</h1>
+              <h1>Drop one photo, get one correction.</h1>
             </div>
             <label class="upload-button" title="Choose image">
               <span aria-hidden="true">+</span>
@@ -303,7 +316,7 @@ function renderEnhancePage() {
 function nav(active) {
   return `
     <nav class="nav">
-      <a class="brand" href="#about">Image Enhancer</a>
+      <a class="brand" href="#about">Lucida</a>
       <div class="nav-links">
         <a class="${active === "about" ? "active" : ""}" href="#about">About</a>
         <a class="${active === "work" ? "active" : ""}" href="#work">Work</a>
@@ -341,12 +354,14 @@ function footer() {
   return `
     <footer class="footer">
       <div>
-        <strong>Browser Image Enhancer</strong>
-        <span>Client-side ONNX inference, FastAPI checkpoint serving, Canvas export.</span>
+        <strong>Lucida</strong>
+        <span><a href="https://github.com/LowIQCoder/lucida">Click here<a></span>
       </div>
       <div>
         <strong>Author</strong>
-        <span>LowIQCoder</span>
+        <span>Marsel Berheev</span> 
+        <span><a href="https://github.com/LowIQCoder">LowIQCoder</span>
+        <span><a href="mailto:marselberheev@mail.ru">marselberheev@mail.ru<a></span>
       </div>
     </footer>
   `;
