@@ -1,7 +1,4 @@
-import { getModelConfig, predictParams, preloadModel } from "./lib/model.js";
-import { applyCorrection } from "./lib/pixels.js";
-import { rgbToResizedTensor } from "./lib/preprocess.js";
-import { decodeHeic, isHeic } from "./lib/heic.js";
+import { imageEnhancer, isSupportedImage } from "./lib/enhancer.js";
 
 const DEMO_ORIGINAL = "/src/assets/demo-original.jpg";
 const DEMO_ENHANCED = "/src/assets/demo-enhanced.jpg";
@@ -10,14 +7,11 @@ const CORRUPTION_EXAMPLES = [
   { label: "Medium corruption", image: "/src/assets/demo-corrupted2.jpg" },
   { label: "High corruption", image: "/src/assets/demo-corrupted3.jpg" }
 ];
-const MAX_OUTPUT_PIXELS = 3_000_000;
-const ACCEPTED_IMAGES = "image/jpeg,image/png,image/bmp,image/webp,image/heic,image/heif,.heic,.heif";
-
 const app = document.querySelector("#app");
 
 let originalUrl;
 let resultUrl;
-let busy = false;
+let currentTaskId;
 
 window.addEventListener("hashchange", render);
 render();
@@ -190,7 +184,7 @@ function renderEnhancePage() {
             <label class="upload-button" title="Choose image">
               <span aria-hidden="true">+</span>
               <span>Choose image</span>
-              <input id="file" type="file" accept="${ACCEPTED_IMAGES}" />
+              <input id="file" type="file" accept="${imageEnhancer.ACCEPTED_IMAGES}" />
             </label>
           </header>
 
@@ -229,6 +223,7 @@ function renderEnhancePage() {
             <div><dt>Contrast</dt><dd id="contrast">-</dd></div>
             <div><dt>Saturation</dt><dd id="saturation">-</dd></div>
           </dl>
+          <button id="cancel" class="primary-action disabled" type="button" disabled>Cancel</button>
           <a id="download" class="primary-action disabled" aria-disabled="true">Download</a>
         </aside>
       </section>
@@ -237,6 +232,7 @@ function renderEnhancePage() {
   `;
 
   document.querySelector("#file").addEventListener("change", handleFile);
+  document.querySelector("#cancel").addEventListener("click", handleCancel);
   setupDropZone();
 }
 
@@ -246,7 +242,7 @@ function nav(active) {
       <a class="brand" href="#about">Lucida</a>
       <div class="nav-links">
         <a class="${active === "about" ? "active" : ""}" href="#about">About</a>
-        <a class="${active === "work" ? "active" : ""}" href="#work">Work</a>
+        <a class="${active === "work" ? "active" : ""}" href="#work">Work Done</a>
         <a class="${active === "enhance" ? "active" : ""}" href="#enhance">Enhance</a>
       </div>
     </nav>
@@ -277,7 +273,7 @@ async function handleTry() {
   status.textContent = "Checking model...";
 
   try {
-    await preloadModel();
+    await imageEnhancer.preloadModel();
     status.textContent = "Ready";
     location.hash = "enhance";
   } catch (error) {
@@ -289,7 +285,7 @@ async function handleTry() {
 async function handleFile() {
   const input = document.querySelector("#file");
   const file = input.files?.[0];
-  await processFile(file);
+  processFile(file);
 }
 
 function setupDropZone() {
@@ -321,101 +317,29 @@ function setupDropZone() {
   });
 }
 
-async function processFile(file) {
-  if (!file || busy) return;
+function processFile(file) {
+  if (!file) return;
   if (!isSupportedImage(file)) {
     setStatus("unsupported file", 0);
     return;
   }
 
-  busy = true;
+  if (currentTaskId) imageEnhancer.cancel(currentTaskId);
   resetUi();
-  const startedAt = performance.now();
-  let bitmap;
+  originalUrl = URL.createObjectURL(file);
+  document.querySelector("#before").src = originalUrl;
 
   try {
-    const modelReady = preloadModel();
-    const source = await toBrowserImage(file);
-
-    originalUrl = URL.createObjectURL(source);
-    document.querySelector("#before").src = originalUrl;
-
-    setStatus("decoding", 10);
-    bitmap = await createImageBitmap(source);
-
-    setStatus("model inference", 35);
-    const modelConfig = await getModelConfig();
-    const preview = makePreview(bitmap, modelConfig);
-    await modelReady;
-    const params = await predictParams(preview);
-
-    setStatus("enhancing", 70);
-    const blob = await enhanceBitmap(bitmap, params);
-
-    resultUrl = URL.createObjectURL(blob);
-    const download = document.querySelector("#download");
-    document.querySelector("#after").src = resultUrl;
-    download.href = resultUrl;
-    download.download = "enhanced.jpg";
-    download.classList.remove("disabled");
-    download.setAttribute("aria-disabled", "false");
-
-    document.querySelector("#brightness").textContent = Number(params.brightness).toFixed(3);
-    document.querySelector("#contrast").textContent = Number(params.contrast).toFixed(3);
-    document.querySelector("#saturation").textContent = Number(params.saturation).toFixed(3);
-    document.querySelector("#time").textContent = `${((performance.now() - startedAt) / 1000).toFixed(2)} s`;
-    setStatus("done", 100);
+    currentTaskId = imageEnhancer.enqueue(file);
+    setCancelEnabled(true);
   } catch (error) {
     document.querySelector("#status").textContent = error instanceof Error ? error.message : String(error);
-  } finally {
-    bitmap?.close();
-    busy = false;
   }
 }
 
-async function toBrowserImage(file) {
-  if (!isHeic(file)) return file;
-  setStatus("converting HEIC", 5);
-  return decodeHeic(file);
-}
-
-function isSupportedImage(file) {
-  return file.type.startsWith("image/") || isHeic(file);
-}
-
-function makePreview(bitmap, modelConfig) {
-  const size = modelConfig.input_image_size;
-  const canvas = document.createElement("canvas");
-  canvas.width = size;
-  canvas.height = size;
-  const context = getContext(canvas);
-  context.drawImage(bitmap, 0, 0, size, size);
-  return {
-    width: size,
-    height: size,
-    tensor: rgbToResizedTensor(context.getImageData(0, 0, size, size), size, size)
-  };
-}
-
-async function enhanceBitmap(bitmap, params) {
-  const scale = Math.min(1, Math.sqrt(MAX_OUTPUT_PIXELS / (bitmap.width * bitmap.height)));
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.max(1, Math.round(bitmap.width * scale));
-  canvas.height = Math.max(1, Math.round(bitmap.height * scale));
-  const context = getContext(canvas);
-  context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-  const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
-  applyCorrection(imageData.data, params);
-  context.putImageData(imageData, 0, 0);
-  return new Promise((resolve, reject) => {
-    canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("Image encode failed"))), "image/jpeg", 0.92);
-  });
-}
-
-function getContext(canvas) {
-  const context = canvas.getContext("2d", { willReadFrequently: true });
-  if (!context) throw new Error("2D canvas context is unavailable");
-  return context;
+function handleCancel() {
+  if (!currentTaskId) return;
+  imageEnhancer.cancel(currentTaskId);
 }
 
 function setStatus(status, value) {
@@ -426,6 +350,7 @@ function setStatus(status, value) {
 
 function resetUi() {
   cleanupUrls();
+  currentTaskId = undefined;
   document.querySelector("#before").removeAttribute("src");
   document.querySelector("#after").removeAttribute("src");
   const download = document.querySelector("#download");
@@ -436,6 +361,7 @@ function resetUi() {
   document.querySelector("#brightness").textContent = "-";
   document.querySelector("#contrast").textContent = "-";
   document.querySelector("#saturation").textContent = "-";
+  setCancelEnabled(false);
   setStatus("waiting", 0);
 }
 
@@ -445,3 +371,43 @@ function cleanupUrls() {
   originalUrl = undefined;
   resultUrl = undefined;
 }
+
+function setCancelEnabled(enabled) {
+  const cancel = document.querySelector("#cancel");
+  if (!cancel) return;
+  cancel.disabled = !enabled;
+  cancel.classList.toggle("disabled", !enabled);
+}
+
+imageEnhancer.addEventListener("statuschange", async ({ detail }) => {
+  if (detail.id !== currentTaskId) return;
+
+  setStatus(detail.status, detail.progress);
+  document.querySelector("#time").textContent = `${(detail.elapsedMs / 1000).toFixed(2)} s`;
+
+  if (detail.params) {
+    document.querySelector("#brightness").textContent = Number(detail.params.brightness).toFixed(3);
+    document.querySelector("#contrast").textContent = Number(detail.params.contrast).toFixed(3);
+    document.querySelector("#saturation").textContent = Number(detail.params.saturation).toFixed(3);
+  }
+
+  if (detail.status === "done") {
+    resultUrl = URL.createObjectURL(imageEnhancer.getResult(detail.id));
+    const download = document.querySelector("#download");
+    document.querySelector("#after").src = resultUrl;
+    download.href = resultUrl;
+    download.download = "enhanced.jpg";
+    download.classList.remove("disabled");
+    download.setAttribute("aria-disabled", "false");
+    setCancelEnabled(false);
+    return;
+  }
+
+  if (detail.status === "failed") {
+    document.querySelector("#status").textContent = detail.error || "failed";
+    setCancelEnabled(false);
+    return;
+  }
+
+  if (detail.status === "cancelled") setCancelEnabled(false);
+});

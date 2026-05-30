@@ -15,6 +15,14 @@ export async function preloadModel() {
   await Promise.all([getModelConfig(), workerRequest("preload")]);
 }
 
+export function resetModel() {
+  if (!worker) return;
+  for (const request of pending.values()) request.reject(new Error("Model worker cancelled"));
+  pending.clear();
+  worker.terminate();
+  worker = undefined;
+}
+
 export async function getModelConfig() {
   if (!configPromise) {
     configPromise = fetch(CONFIG_URL, { cache: "no-store" }).then(async (response) => {
@@ -49,8 +57,7 @@ function getWorker() {
   worker.onerror = (error) => {
     for (const request of pending.values()) request.reject(error.error || new Error(error.message));
     pending.clear();
-    worker.terminate();
-    worker = undefined;
+    resetModel();
   };
   return worker;
 }
