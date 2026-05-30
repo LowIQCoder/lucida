@@ -11,7 +11,6 @@ COPY ml/models ./ml/models
 ENV PYTHONUNBUFFERED=1
 ENV PORT=8000
 ENV HOST=0.0.0.0
-ENV LOG_FILE=/app/backend/logs/app.log
 
 EXPOSE 8000
 

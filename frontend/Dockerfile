@@ -15,9 +15,6 @@ RUN mkdir -p dist \
 FROM nginx:alpine
 
 COPY --from=build /app/frontend/dist /usr/share/nginx/html
-
-ENV BACKEND_URL=http://localhost:8000
+COPY frontend/nginx.conf.template /etc/nginx/templates/default.conf.template
 
 EXPOSE 80
-
-CMD ["/bin/sh", "-c", "printf 'globalThis.__APP_CONFIG__ = { backendUrl: \"%s\" };\\n' \"$BACKEND_URL\" > /usr/share/nginx/html/runtime-config.js && nginx -g 'daemon off;'"]
