@@ -66,7 +66,21 @@ The model does not generate pixels. This keeps inference small and lets the brow
 
 ## Deploy
 
-Create `.env` from `.env.example`, then run:
+First of all initialaze DVC repository and download latest model checkpoint (contact author for DVC access):
+```bash
+dvc init
+dvc remote add -d gdrive gdrive://<your_gdrive_folder_id>
+dvc remote modify gdrive gdrive_use_service_account true
+dvc remote modify gdrive gdrive_acknowledge_abuse true
+dvc remote modify gdrive --local gdrive_service_account_json_file_path path/to/file.json.
+```
+
+And pull all data
+```bash
+dvc pull
+```
+
+Now create `.env` from `.env.example`, then run:
 
 ```bash
 docker compose up --build
