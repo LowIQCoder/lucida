@@ -14,6 +14,7 @@ export const imageEnhancer = {
   getStatus,
   cancel,
   getResult,
+  release,
   addEventListener: (...args) => events.addEventListener(...args),
   removeEventListener: (...args) => events.removeEventListener(...args),
   preloadModel
@@ -60,6 +61,7 @@ export function cancel(id) {
   task.workerReject = undefined;
   resetModel();
   updateTask(task, "cancelled", task.progress);
+  release(id);
   return { id, cancelled: true, status: task.status };
 }
 
@@ -67,6 +69,22 @@ export function getResult(id) {
   const task = requireTask(id);
   if (task.status !== "done") throw new Error(`Task is not done: ${task.status}`);
   return task.result;
+}
+
+export function release(id) {
+  const task = tasks.get(String(id));
+  if (!task) return false;
+
+  task.abortController.abort();
+  task.worker?.terminate();
+  task.workerReject = undefined;
+  task.file = undefined;
+  task.result = undefined;
+  task.params = undefined;
+  task.error = undefined;
+  task.promise = undefined;
+  tasks.delete(String(id));
+  return true;
 }
 
 export function isSupportedImage(file) {
@@ -111,6 +129,7 @@ async function runTask(task) {
     task.error = error instanceof Error ? error.message : String(error);
     task.finishedAt = performance.now();
     updateTask(task, "failed", task.progress);
+    release(task.id);
   }
 }
 

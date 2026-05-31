@@ -1,4 +1,5 @@
 const DEMO_ORIGINAL = "/src/assets/demo-original.jpg";
+const DEMO_ENHANCED = "/src/assets/demo-enhanced.png";
 const ACCEPTED_IMAGES = "image/jpeg,image/png,image/bmp,image/heic,image/heif,.heic,.heif";
 const app = document.querySelector("#app");
 
@@ -6,6 +7,8 @@ let originalUrl;
 let resultUrl;
 let currentTaskId;
 let enhancerModulePromise;
+let currentAbort;
+let ui = {};
 
 window.addEventListener("hashchange", render);
 render();
@@ -16,9 +19,19 @@ function route() {
 }
 
 function render() {
+  const currentRoute = route();
+  if (currentRoute !== "enhance") cancelActiveTask();
   cleanupUrls();
-  if (route() === "enhance") renderEnhancePage();
+  if (currentRoute === "enhance") renderEnhancePage();
   else renderAboutPage();
+}
+
+function cancelActiveTask() {
+  if (!currentTaskId) return;
+  const id = currentTaskId;
+  currentTaskId = undefined;
+  currentAbort?.abort();
+  enhancerModulePromise?.then(({ imageEnhancer }) => imageEnhancer.cancel(id));
 }
 
 function renderAboutPage() {
@@ -36,9 +49,12 @@ function renderAboutPage() {
           </div>
         </div>
         <div class="compare-card">
-          <div class="compare">
+          <div class="compare" id="compare" style="--split: 52%">
             <img src="${DEMO_ORIGINAL}" alt="Original dim desk photo" />
+            <img class="compare-after" src="${DEMO_ENHANCED}" alt="Enhanced bright desk photo preview" />
+            <span class="divider" aria-hidden="true"></span>
           </div>
+          <input id="compareSlider" class="compare-slider" type="range" min="0" max="100" value="52" aria-label="Before and after comparison" />
         </div>
       </section>
 
@@ -73,6 +89,10 @@ function renderAboutPage() {
       ${footer()}
     </main>
   `;
+
+  document.querySelector("#compareSlider").addEventListener("input", (event) => {
+    document.querySelector("#compare").style.setProperty("--split", `${event.target.value}%`);
+  });
 
   document.querySelector("#tryButton").addEventListener("click", handleTry);
 }
@@ -140,6 +160,7 @@ function renderEnhancePage() {
 
   document.querySelector("#file").addEventListener("change", handleFile);
   document.querySelector("#cancel").addEventListener("click", handleCancel);
+  cacheEnhanceUi();
   setupDropZone();
 }
 
@@ -226,12 +247,17 @@ function setupDropZone() {
 
 async function processFile(file) {
   if (!file) return;
+  currentAbort?.abort();
+  currentAbort = new AbortController();
+  const { signal } = currentAbort;
+
   if (!isAcceptedFile(file)) {
     setStatus("unsupported file", 0);
     return;
   }
 
   const { imageEnhancer, isSupportedImage } = await loadEnhancer();
+  if (signal.aborted) return;
   if (!isSupportedImage(file)) {
     setStatus("unsupported file", 0);
     return;
@@ -239,8 +265,12 @@ async function processFile(file) {
 
   if (currentTaskId) imageEnhancer.cancel(currentTaskId);
   resetUi();
-  originalUrl = URL.createObjectURL(file);
-  document.querySelector("#before").src = originalUrl;
+  originalUrl = await makePreviewUrl(file);
+  if (signal.aborted) {
+    cleanupUrls();
+    return;
+  }
+  ui.before.src = originalUrl;
 
   try {
     currentTaskId = imageEnhancer.enqueue(file);
@@ -252,6 +282,7 @@ async function processFile(file) {
 
 function handleCancel() {
   if (!currentTaskId) return;
+  currentAbort?.abort();
   loadEnhancer().then(({ imageEnhancer }) => imageEnhancer.cancel(currentTaskId));
 }
 
@@ -262,24 +293,24 @@ function isAcceptedFile(file) {
 }
 
 function setStatus(status, value) {
-  document.querySelector("#status").textContent = status;
-  document.querySelector("#progress").value = value;
-  document.querySelector("#progressText").textContent = `${value}%`;
+  if (!ui.status) return;
+  ui.status.textContent = status;
+  ui.progress.value = value;
+  ui.progressText.textContent = `${value}%`;
 }
 
 function resetUi() {
   cleanupUrls();
   currentTaskId = undefined;
-  document.querySelector("#before").removeAttribute("src");
-  document.querySelector("#after").removeAttribute("src");
-  const download = document.querySelector("#download");
-  download.classList.add("disabled");
-  download.removeAttribute("href");
-  download.setAttribute("aria-disabled", "true");
-  document.querySelector("#time").textContent = "-";
-  document.querySelector("#brightness").textContent = "-";
-  document.querySelector("#contrast").textContent = "-";
-  document.querySelector("#saturation").textContent = "-";
+  ui.before?.removeAttribute("src");
+  ui.after?.removeAttribute("src");
+  ui.download?.classList.add("disabled");
+  ui.download?.removeAttribute("href");
+  ui.download?.setAttribute("aria-disabled", "true");
+  if (ui.time) ui.time.textContent = "-";
+  if (ui.brightness) ui.brightness.textContent = "-";
+  if (ui.contrast) ui.contrast.textContent = "-";
+  if (ui.saturation) ui.saturation.textContent = "-";
   setCancelEnabled(false);
   setStatus("waiting", 0);
 }
@@ -292,10 +323,47 @@ function cleanupUrls() {
 }
 
 function setCancelEnabled(enabled) {
-  const cancel = document.querySelector("#cancel");
-  if (!cancel) return;
-  cancel.disabled = !enabled;
-  cancel.classList.toggle("disabled", !enabled);
+  if (!ui.cancel) return;
+  ui.cancel.disabled = !enabled;
+  ui.cancel.classList.toggle("disabled", !enabled);
+}
+
+function cacheEnhanceUi() {
+  ui = {
+    file: document.querySelector("#file"),
+    before: document.querySelector("#before"),
+    after: document.querySelector("#after"),
+    status: document.querySelector("#status"),
+    progress: document.querySelector("#progress"),
+    progressText: document.querySelector("#progressText"),
+    time: document.querySelector("#time"),
+    brightness: document.querySelector("#brightness"),
+    contrast: document.querySelector("#contrast"),
+    saturation: document.querySelector("#saturation"),
+    cancel: document.querySelector("#cancel"),
+    download: document.querySelector("#download")
+  };
+}
+
+async function makePreviewUrl(file, maxSide = 1200) {
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
+    const width = Math.max(1, Math.round(bitmap.width * scale));
+    const height = Math.max(1, Math.round(bitmap.height * scale));
+    const canvas = typeof OffscreenCanvas === "function" ? new OffscreenCanvas(width, height) : document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    canvas.getContext("2d", { alpha: false }).drawImage(bitmap, 0, 0, width, height);
+    bitmap.close();
+
+    const blob = canvas.convertToBlob
+      ? await canvas.convertToBlob({ type: "image/jpeg", quality: 0.72 })
+      : await new Promise((resolve, reject) => canvas.toBlob((item) => (item ? resolve(item) : reject(new Error("Preview encode failed"))), "image/jpeg", 0.72));
+    return URL.createObjectURL(blob);
+  } catch {
+    return URL.createObjectURL(file);
+  }
 }
 
 function loadEnhancer() {
@@ -312,29 +380,31 @@ async function handleTaskStatus({ detail }) {
   if (detail.id !== currentTaskId) return;
 
   setStatus(detail.status, detail.progress);
-  document.querySelector("#time").textContent = `${(detail.elapsedMs / 1000).toFixed(2)} s`;
+  if (ui.time) ui.time.textContent = `${(detail.elapsedMs / 1000).toFixed(2)} s`;
 
   if (detail.params) {
-    document.querySelector("#brightness").textContent = Number(detail.params.brightness).toFixed(3);
-    document.querySelector("#contrast").textContent = Number(detail.params.contrast).toFixed(3);
-    document.querySelector("#saturation").textContent = Number(detail.params.saturation).toFixed(3);
+    if (ui.brightness) ui.brightness.textContent = Number(detail.params.brightness).toFixed(3);
+    if (ui.contrast) ui.contrast.textContent = Number(detail.params.contrast).toFixed(3);
+    if (ui.saturation) ui.saturation.textContent = Number(detail.params.saturation).toFixed(3);
   }
 
   if (detail.status === "done") {
     const { imageEnhancer } = await loadEnhancer();
     resultUrl = URL.createObjectURL(imageEnhancer.getResult(detail.id));
-    const download = document.querySelector("#download");
-    document.querySelector("#after").src = resultUrl;
-    download.href = resultUrl;
-    download.download = "enhanced.jpg";
-    download.classList.remove("disabled");
-    download.setAttribute("aria-disabled", "false");
+    imageEnhancer.release(detail.id);
+    if (ui.after) ui.after.src = resultUrl;
+    if (ui.download) {
+      ui.download.href = resultUrl;
+      ui.download.download = "enhanced.jpg";
+      ui.download.classList.remove("disabled");
+      ui.download.setAttribute("aria-disabled", "false");
+    }
     setCancelEnabled(false);
     return;
   }
 
   if (detail.status === "failed") {
-    document.querySelector("#status").textContent = detail.error || "failed";
+    if (ui.status) ui.status.textContent = detail.error || "failed";
     setCancelEnabled(false);
     return;
   }
