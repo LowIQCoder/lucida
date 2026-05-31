@@ -1,6 +1,6 @@
 import { decodeHeic, isHeic } from "./heic.js";
 import { getModelConfig, predictParams, preloadModel, resetModel } from "./model.js";
-import { rgbToResizedTensor } from "./preprocess.js";
+import { rgbToResizedTensorAndStats } from "./preprocess.js";
 
 const ACCEPTED_IMAGES = "image/jpeg,image/png,image/bmp,image/heic,image/heif,.heic,.heif";
 const MAX_INPUT_PIXELS = 15_000_000;
@@ -130,10 +130,12 @@ function makePreview(bitmap, modelConfig) {
   canvas.height = size;
   const context = getContext(canvas);
   context.drawImage(bitmap, 0, 0, size, size);
+  const { tensor, stats } = rgbToResizedTensorAndStats(context.getImageData(0, 0, size, size), size, size);
   return {
     width: size,
     height: size,
-    tensor: rgbToResizedTensor(context.getImageData(0, 0, size, size), size, size)
+    tensor,
+    stats
   };
 }
 

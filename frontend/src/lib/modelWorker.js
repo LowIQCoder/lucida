@@ -1,5 +1,5 @@
 const LATEST_MODEL_URL = "/api/checkpoint/latest";
-const ORT_SCRIPT_URL = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.25.1/dist/ort.min.js";
+const ORT_SCRIPT_URL = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.25.1/dist/ort.wasm.min.js";
 const ORT_WASM_PATH = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.25.1/dist/";
 
 let checkpointPromise;
@@ -16,14 +16,12 @@ self.onmessage = async ({ data }) => {
     }
 
     if (data.type === "predict") {
-      const checkpoint = await getCheckpoint();
-      const session = await getSession();
-      const { tensor, width, height } = data;
-      const config = checkpoint.config;
+      const { session, config } = await getSession();
+      const { tensor, stats, width, height } = data;
       const [imageInputName, statsInputName] = config.input_names;
       const outputs = await session.run({
         [imageInputName]: new self.ort.Tensor("float32", tensor, [1, 3, width, height]),
-        [statsInputName]: new self.ort.Tensor("float32", imageStats(tensor, width * height), [1, 18])
+        [statsInputName]: new self.ort.Tensor("float32", stats, [1, 18])
       });
 
       const values = outputs[config.output_name].data;
@@ -48,15 +46,16 @@ async function getSession() {
     sessionPromise = (async () => {
       const checkpoint = await getCheckpoint();
       const ort = self.ort;
+      ort.env.logLevel = "fatal";
       ort.env.wasm.wasmPaths = ORT_WASM_PATH;
       ort.env.wasm.numThreads = 1;
 
       const session = await ort.InferenceSession.create(checkpoint.bytes, {
         executionProviders: ["wasm"],
-        graphOptimizationLevel: "all"
+        graphOptimizationLevel: checkpoint.format === "ort" ? "disabled" : "all"
       });
       checkpoint.bytes = undefined;
-      return session;
+      return { session, config: checkpoint.config };
     })();
   }
   return sessionPromise;
@@ -76,6 +75,7 @@ async function getCheckpoint() {
 
       return {
         bytes,
+        format: (response.headers.get("x-model-format") || "onnx").toLowerCase(),
         config: normalizeModelConfig(JSON.parse(configHeader))
       };
     });
@@ -98,55 +98,4 @@ function validateModelResponse(bytes, contentType) {
   if (prefix.trimStart().startsWith("<") || contentType.includes("text/html") || contentType.includes("application/json")) {
     throw new Error(`Model endpoint returned ${contentType || "non-onnx response"}`);
   }
-}
-
-function imageStats(tensor, plane) {
-  const stats = new Float32Array(18);
-  let globalSum = 0;
-
-  for (let channel = 0; channel < 3; channel += 1) {
-    const start = channel * plane;
-    let sum = 0;
-    let min = Infinity;
-    let max = -Infinity;
-
-    for (let i = 0; i < plane; i += 1) {
-      const value = tensor[start + i];
-      sum += value;
-      if (value < min) min = value;
-      if (value > max) max = value;
-    }
-
-    stats[channel] = sum / plane;
-    stats[9 + channel] = min;
-    stats[12 + channel] = max;
-    globalSum += sum;
-  }
-
-  for (let channel = 0; channel < 3; channel += 1) {
-    const start = channel * plane;
-    let variance = 0;
-
-    for (let i = 0; i < plane; i += 1) {
-      const delta = tensor[start + i] - stats[channel];
-      variance += delta * delta;
-    }
-
-    variance /= plane;
-    stats[3 + channel] = Math.sqrt(variance);
-    stats[6 + channel] = variance;
-  }
-
-  const globalMean = globalSum / tensor.length;
-  let globalVariance = 0;
-  for (let i = 0; i < tensor.length; i += 1) {
-    const delta = tensor[i] - globalMean;
-    globalVariance += delta * delta;
-  }
-
-  globalVariance /= tensor.length;
-  stats[15] = globalMean;
-  stats[16] = Math.sqrt(globalVariance);
-  stats[17] = globalVariance;
-  return stats;
 }

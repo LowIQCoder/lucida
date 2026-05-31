@@ -5,6 +5,7 @@
 Lucida is a small project for client-side image correction. A CNN checkpoint predicts brightness, contrast, and saturation values from an input image; the browser runs the ONNX model with ONNX Runtime Web and applies the correction locally with Canvas.
 
 Images are not uploaded for inference. The backend only serves the latest model checkpoint and its config.
+When an ORT-format checkpoint exists, the backend serves it before the raw ONNX file to reduce browser runtime load work.
 
 ## Structure
 
@@ -29,13 +30,23 @@ Useful backend endpoints:
 
 - `GET /api/health`
 - `GET /api/checkpoint/latest`
+- `GET /api/checkpoint/latest/config`
 - `GET /api/checkpoint/<model_id>`
 
 The frontend container proxies `/api/*` to the backend using `BACKEND_URL` from `.env`.
 
+## Project Work
+
+Lucida contains three main parts: generated training data, a compact CNN checkpoint, and a browser runtime that runs inference locally and applies a deterministic pixel correction.
+
 ## Dataset
 
 Dataset starts from original images and adds synthetic corruption with different severity levels.
+
+- Source data: 2000 original images collected through WikiMediaAPI.
+- Processed dataset: 10,000 samples.
+- Sample mix: 1,000 original, 2,500 small corruption, and 6,500 high corruption examples.
+- Target task: the model does not generate pixels. It predicts correction parameters, then the browser applies them to the source image.
 
 | Small corruption | Medium corruption | High corruption |
 | --- | --- | --- |
@@ -43,11 +54,15 @@ Dataset starts from original images and adds synthetic corruption with different
 
 ## Model
 
-This project uses simple CNN
+The model is a compact CNN encoder. It receives a downsampled RGB image plus handcrafted statistics, then predicts brightness, contrast, and saturation.
+
+- Image encoder: downsampled RGB image passes through compact CNN blocks.
+- Stats branch: mean, variance, min, and max values add global color context.
+- MLP head: predicts brightness, contrast, and saturation parameters.
 
 ```mermaid
 flowchart LR
-    image["HSV image<br/>B x 3 x 256 x 256"]
+    image["RGB image<br/>B x 3 x 256 x 256"]
     stats["stats<br/>B x 18"]
     norm["normalize<br/>(image - 0.5) / 0.5"]
 
@@ -55,7 +70,7 @@ flowchart LR
 
     subgraph encoder["CNN encoder"]
         direction LR
-        l1["Level 1<br/>Conv 3x3 stride 2: HSV 3 to 32<br/>BatchNorm + ReLU<br/>ResidualConvBlock 32<br/>B x 32 x 128 x 128"]
+        l1["Level 1<br/>Conv 3x3 stride 2: RGB 3 to 32<br/>BatchNorm + ReLU<br/>ResidualConvBlock 32<br/>B x 32 x 128 x 128"]
         l2["Level 2<br/>Conv 3x3 stride 2: 32 to 64<br/>BatchNorm + ReLU<br/>ResidualConvBlock 64<br/>add proj r1<br/>B x 64 x 64 x 64"]
         l3["Level 3<br/>Conv 3x3 stride 2: 64 to 128<br/>BatchNorm + ReLU<br/>ResidualConvBlock 128<br/>add proj r1 and r2<br/>B x 128 x 32 x 32"]
         l4["Level 4<br/>Conv 3x3 stride 2: 128 to 192<br/>BatchNorm + ReLU<br/>ResidualConvBlock 192<br/>add proj r1 r2 r3<br/>B x 192 x 16 x 16"]
@@ -124,6 +139,11 @@ flowchart LR
     class output outputNode;
 ```
 
+## App Architecture
+
+- Latest model checkpoint: ONNX file stored as a versioned checkpoint. Frontend asks API for the latest checkpoint when user starts work.
+- Backend app: FastAPI delivers model checkpoint and config. It does not run ML inference.
+- Frontend app: browser loads the ONNX Runtime Web WASM-only build in a worker, runs the ORT-format checkpoint when available, applies Canvas enhancement in a worker, manages drag and drop, preview, status, cancel, and download.
 
 ## License
 

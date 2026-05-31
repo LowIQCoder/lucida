@@ -28,5 +28,10 @@ class Checkpoint(BaseModel):
 
     @property
     def size(self) -> int:
-        """Return ONNX model file size in bytes."""
+        """Return model file size in bytes."""
         return self.model_path.stat().st_size
+
+    @property
+    def format(self) -> str:
+        """Return checkpoint file format."""
+        return self.model_path.suffix.lstrip(".").lower()

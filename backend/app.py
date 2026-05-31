@@ -35,7 +35,7 @@ def configure_app(application: FastAPI) -> None:
         allow_origins=["*"],
         allow_methods=["*"],
         allow_headers=["*"],
-        expose_headers=["X-Model-Id", "X-Model-Size", "X-Model-Config"],
+        expose_headers=["X-Model-Id", "X-Model-Size", "X-Model-Format", "X-Model-Config"],
     )
 
 
@@ -86,6 +86,7 @@ def checkpoint_response(checkpoint_data: Checkpoint) -> FileResponse:
             "Cache-Control": "no-store",
             "X-Model-Id": checkpoint_data.model_id,
             "X-Model-Size": str(checkpoint_data.size),
+            "X-Model-Format": checkpoint_data.format,
             "X-Model-Config": json.dumps(checkpoint_data.config.model_dump()),
         },
     )

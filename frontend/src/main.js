@@ -2,11 +2,6 @@ import { imageEnhancer, isSupportedImage } from "./lib/enhancer.js";
 
 const DEMO_ORIGINAL = "/src/assets/demo-original.jpg";
 const DEMO_ENHANCED = "/src/assets/demo-enhanced.jpg";
-const CORRUPTION_EXAMPLES = [
-  { label: "Small corruption", image: "/src/assets/demo-corrupted1.jpg" },
-  { label: "Medium corruption", image: "/src/assets/demo-corrupted2.jpg" },
-  { label: "High corruption", image: "/src/assets/demo-corrupted3.jpg" }
-];
 const app = document.querySelector("#app");
 
 let originalUrl;
@@ -18,13 +13,12 @@ render();
 
 function route() {
   const name = location.hash.replace("#", "");
-  return ["about", "work", "enhance"].includes(name) ? name : "about";
+  return ["about", "enhance"].includes(name) ? name : "about";
 }
 
 function render() {
   cleanupUrls();
   if (route() === "enhance") renderEnhancePage();
-  else if (route() === "work") renderWorkPage();
   else renderAboutPage();
 }
 
@@ -89,85 +83,6 @@ function renderAboutPage() {
   });
 
   document.querySelector("#tryButton").addEventListener("click", handleTry);
-}
-
-function renderWorkPage() {
-  app.innerHTML = `
-    <main class="site work-site">
-      ${nav("work")}
-      <section class="work-hero">
-        <p class="eyebrow">Project work</p>
-        <h1>DWhat  have been done</h1>
-        <p class="lead">This page describes what was built: data generation, CNN model, checkpoint delivery, and browser-side enhancement pipeline.</p>
-      </section>
-
-      <section class="work-section two-column-section">
-        <div>
-          <p class="eyebrow">Dataset description</p>
-          <h2>Original images plus synthetic corruption.</h2>
-          <div class="corruption-examples">
-            ${CORRUPTION_EXAMPLES.map((example) => `
-              <figure>
-                <img src="${example.image}" alt="${example.label} example" />
-                <figcaption>${example.label}</figcaption>
-              </figure>
-            `).join("")}
-          </div>
-        </div>
-        <div class="info-list">
-          <article>
-            <h3>Source data</h3>
-            <p>Dataset starts from 2000 original images collected through WikiMediaAPI.</p>
-          </article>
-          <article>
-            <h3>Corrupted samples</h3>
-            <p>Processed dataset contains 10,000 samples: 1,000 original, 2,500 small corruption, and 6,500 high corruption examples.</p>
-          </article>
-          <article>
-            <h3>Target task</h3>
-            <p>Model does not generate pixels. It predicts correction parameters, then browser applies them to source image.</p>
-          </article>
-        </div>
-      </section>
-
-      <section class="work-section">
-        <div class="section-head">
-          <p class="eyebrow">Model architecture</p>
-          <h2>CNN encoder combines RGB image features with handcrafted stats.</h2>
-        </div>
-        <div class="arch-grid">
-          <article><span>01</span><h3>Image encoder</h3><p>Downsampled RGB image passes through compact CNN blocks.</p></article>
-          <article><span>02</span><h3>Stats branch</h3><p>Mean, variance, min, and max values add global color context.</p></article>
-          <article><span>03</span><h3>MLP head</h3><p>Head predicts brightness, contrast, and saturation parameters.</p></article>
-        </div>
-      </section>
-
-      <section class="work-section two-column-section">
-        <div>
-          <p class="eyebrow">App architecture</p>
-          <h2>Small backend, browser inference, clear delivery path.</h2>
-        </div>
-        <div class="app-flow">
-          <article>
-            <span>01</span>
-            <h3>Latest model checkpoint</h3>
-            <p>ONNX file stored as versioned checkpoint. Frontend asks API for latest checkpoint when user starts work.</p>
-          </article>
-          <article>
-            <span>02</span>
-            <h3>Backend app</h3>
-            <p>FastAPI collects logs and delivers model checkpoint to user. It does not run ML inference.</p>
-          </article>
-          <article>
-            <span>03</span>
-            <h3>Frontend app</h3>
-            <p>Frontend loads model with ONNX Runtime Web, runs prediction, applies Canvas enhancement, manages drag and drop, preview, and download.</p>
-          </article>
-        </div>
-      </section>
-      ${footer()}
-    </main>
-  `;
 }
 
 function renderEnhancePage() {
@@ -242,7 +157,6 @@ function nav(active) {
       <a class="brand" href="#about">Lucida</a>
       <div class="nav-links">
         <a class="${active === "about" ? "active" : ""}" href="#about">About</a>
-        <a class="${active === "work" ? "active" : ""}" href="#work">Work Done</a>
         <a class="${active === "enhance" ? "active" : ""}" href="#enhance">Enhance</a>
       </div>
     </nav>

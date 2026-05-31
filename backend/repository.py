@@ -6,7 +6,11 @@ from pathlib import Path
 from backend.models import Checkpoint, ModelConfig
 
 
-MODEL_FILE = "model.onnx"
+MODEL_FILES = (
+    "model.with_runtime_opt.ort",
+    "model.ort",
+    "model.onnx",
+)
 CONFIG_FILE = "config.json"
 
 
@@ -38,7 +42,7 @@ class CheckpointRepository:  # pylint: disable=too-few-public-methods
         )
         return Checkpoint(
             model_id=model_path.name,
-            model_path=model_path / MODEL_FILE,
+            model_path=self._model_file(model_path),
             config=self._read_config(model_path),
         )
 
@@ -47,7 +51,7 @@ class CheckpointRepository:  # pylint: disable=too-few-public-methods
             path
             for path in self.model_dir.iterdir()
             if path.is_dir()
-            and (path / MODEL_FILE).is_file()
+            and self._model_file(path).is_file()
             and (path / CONFIG_FILE).is_file()
         ]
 
@@ -62,10 +66,18 @@ class CheckpointRepository:  # pylint: disable=too-few-public-methods
         if (
             not path.is_relative_to(self.model_dir)
             or not path.is_dir()
-            or not (path / MODEL_FILE).is_file()
+            or not self._model_file(path).is_file()
         ):
             raise CheckpointNotFoundError("Checkpoint not found")
         return path
+
+    @staticmethod
+    def _model_file(model_path: Path) -> Path:
+        for file_name in MODEL_FILES:
+            path = model_path / file_name
+            if path.is_file():
+                return path
+        return model_path / MODEL_FILES[-1]
 
     @staticmethod
     def _read_config(model_path: Path) -> ModelConfig:

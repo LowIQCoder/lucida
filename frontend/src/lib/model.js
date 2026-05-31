@@ -1,4 +1,4 @@
-import { imageDataToTensor } from "./preprocess.js";
+import { imageDataToTensorAndStats } from "./preprocess.js";
 
 const CONFIG_URL = "/api/checkpoint/latest/config";
 let configPromise;
@@ -7,8 +7,8 @@ let nextId = 1;
 const pending = new Map();
 
 export async function predictParams(imageData) {
-  const tensor = imageDataToTensor(imageData);
-  return workerRequest("predict", { tensor, width: imageData.width, height: imageData.height }, [tensor.buffer]);
+  const { tensor, stats } = imageDataToTensorAndStats(imageData);
+  return workerRequest("predict", { tensor, stats, width: imageData.width, height: imageData.height }, [tensor.buffer, stats.buffer]);
 }
 
 export async function preloadModel() {
