@@ -5,6 +5,15 @@ server {
   root /usr/share/nginx/html;
   index index.html;
 
+  types {
+    text/html html;
+    text/css css;
+    application/javascript js mjs;
+    application/wasm wasm;
+    image/jpeg jpg jpeg;
+    image/png png;
+  }
+
   location /api/ {
     proxy_pass ${BACKEND_URL};
     proxy_http_version 1.1;

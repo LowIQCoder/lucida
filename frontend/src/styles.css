@@ -178,65 +178,6 @@ h1 {
   object-fit: cover;
 }
 
-.compare-after {
-  position: absolute;
-  inset: 0;
-  clip-path: inset(0 0 0 var(--split));
-}
-
-.divider {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: var(--split);
-  width: 3px;
-  transform: translateX(-1px);
-  background: #ffffff;
-  box-shadow: 0 0 0 1px rgba(20, 24, 22, 0.18);
-}
-
-.compare-slider {
-  position: absolute;
-  right: 18px;
-  bottom: 18px;
-  left: 18px;
-  width: calc(100% - 36px);
-  accent-color: #e0a32b;
-}
-
-.about-band {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
-  padding: 0 0 24px;
-}
-
-.about-band article {
-  min-height: 148px;
-  padding: 18px;
-  border: 1px solid #d8d0c2;
-  border-radius: 8px;
-  background: #ffffff;
-}
-
-.about-band span {
-  color: #b47717;
-  font-weight: 800;
-}
-
-.about-band h2 {
-  margin-top: 16px;
-  color: #15231d;
-  font-size: 1.1rem;
-}
-
-.about-band p {
-  margin-top: 8px;
-  color: #5c6761;
-  line-height: 1.5;
-}
-
-.details-section,
 .flow-section {
   display: grid;
   grid-template-columns: minmax(260px, 0.72fr) minmax(0, 1.28fr);
@@ -245,37 +186,10 @@ h1 {
   border-top: 1px solid #d8d0c2;
 }
 
-.details-section h2,
 .flow-section h2 {
   color: #15231d;
   font-size: clamp(1.5rem, 3vw, 3rem);
   line-height: 1.05;
-}
-
-.details-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
-}
-
-.details-grid article {
-  min-height: 150px;
-  padding: 18px;
-  border: 1px solid #d8d0c2;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.76);
-}
-
-.details-grid h3 {
-  margin: 0;
-  color: #17231f;
-  font-size: 1rem;
-}
-
-.details-grid p {
-  margin-top: 10px;
-  color: #5c6761;
-  line-height: 1.5;
 }
 
 .flow-diagram {
@@ -581,7 +495,6 @@ button:disabled,
 @media (max-width: 980px) {
   .about-hero,
   .enhance-layout,
-  .details-section,
   .flow-section {
     grid-template-columns: 1fr;
   }
@@ -627,8 +540,6 @@ button:disabled,
   }
 
   .preview-grid,
-  .about-band,
-  .details-grid,
   .flow-diagram {
     grid-template-columns: 1fr;
   }

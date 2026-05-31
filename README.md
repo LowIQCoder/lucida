@@ -6,6 +6,7 @@ Lucida is a small project for client-side image correction. A CNN checkpoint pre
 
 Images are not uploaded for inference. The backend only serves the latest model checkpoint and its config.
 When an ORT-format checkpoint exists, the backend serves it before the raw ONNX file to reduce browser runtime load work.
+The frontend uses a locally built minimal ONNX Runtime Web WASM runtime generated from `model.required_operators.with_runtime_opt.config`.
 
 ## Structure
 

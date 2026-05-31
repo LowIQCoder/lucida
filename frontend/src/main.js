@@ -1,12 +1,11 @@
-import { imageEnhancer, isSupportedImage } from "./lib/enhancer.js";
-
 const DEMO_ORIGINAL = "/src/assets/demo-original.jpg";
-const DEMO_ENHANCED = "/src/assets/demo-enhanced.jpg";
+const ACCEPTED_IMAGES = "image/jpeg,image/png,image/bmp,image/heic,image/heif,.heic,.heif";
 const app = document.querySelector("#app");
 
 let originalUrl;
 let resultUrl;
 let currentTaskId;
+let enhancerModulePromise;
 
 window.addEventListener("hashchange", render);
 render();
@@ -37,12 +36,9 @@ function renderAboutPage() {
           </div>
         </div>
         <div class="compare-card">
-          <div class="compare" id="compare" style="--split: 52%">
+          <div class="compare">
             <img src="${DEMO_ORIGINAL}" alt="Original dim desk photo" />
-            <img class="compare-after" src="${DEMO_ENHANCED}" alt="Enhanced bright desk photo" />
-            <span class="divider" aria-hidden="true"></span>
           </div>
-          <input id="compareSlider" class="compare-slider" type="range" min="0" max="100" value="52" aria-label="Before and after comparison" />
         </div>
       </section>
 
@@ -78,10 +74,6 @@ function renderAboutPage() {
     </main>
   `;
 
-  document.querySelector("#compareSlider").addEventListener("input", (event) => {
-    document.querySelector("#compare").style.setProperty("--split", `${event.target.value}%`);
-  });
-
   document.querySelector("#tryButton").addEventListener("click", handleTry);
 }
 
@@ -99,7 +91,7 @@ function renderEnhancePage() {
             <label class="upload-button" title="Choose image">
               <span aria-hidden="true">+</span>
               <span>Choose image</span>
-              <input id="file" type="file" accept="${imageEnhancer.ACCEPTED_IMAGES}" />
+              <input id="file" type="file" accept="${ACCEPTED_IMAGES}" />
             </label>
           </header>
 
@@ -187,6 +179,7 @@ async function handleTry() {
   status.textContent = "Checking model...";
 
   try {
+    const { imageEnhancer } = await loadEnhancer();
     await imageEnhancer.preloadModel();
     status.textContent = "Ready";
     location.hash = "enhance";
@@ -222,7 +215,7 @@ function setupDropZone() {
   });
 
   dropZone.addEventListener("drop", async (event) => {
-    const file = [...event.dataTransfer.files].find(isSupportedImage);
+    const file = [...event.dataTransfer.files].find(isAcceptedFile);
     if (!file) {
       setStatus("drop image file", 0);
       return;
@@ -231,8 +224,14 @@ function setupDropZone() {
   });
 }
 
-function processFile(file) {
+async function processFile(file) {
   if (!file) return;
+  if (!isAcceptedFile(file)) {
+    setStatus("unsupported file", 0);
+    return;
+  }
+
+  const { imageEnhancer, isSupportedImage } = await loadEnhancer();
   if (!isSupportedImage(file)) {
     setStatus("unsupported file", 0);
     return;
@@ -253,7 +252,13 @@ function processFile(file) {
 
 function handleCancel() {
   if (!currentTaskId) return;
-  imageEnhancer.cancel(currentTaskId);
+  loadEnhancer().then(({ imageEnhancer }) => imageEnhancer.cancel(currentTaskId));
+}
+
+function isAcceptedFile(file) {
+  const type = file.type.toLowerCase();
+  const name = file.name.toLowerCase();
+  return type === "image/jpeg" || type === "image/png" || type === "image/bmp" || type === "image/heic" || type === "image/heif" || name.endsWith(".heic") || name.endsWith(".heif");
 }
 
 function setStatus(status, value) {
@@ -293,7 +298,17 @@ function setCancelEnabled(enabled) {
   cancel.classList.toggle("disabled", !enabled);
 }
 
-imageEnhancer.addEventListener("statuschange", async ({ detail }) => {
+function loadEnhancer() {
+  if (!enhancerModulePromise) {
+    enhancerModulePromise = import("./lib/enhancer.js").then((module) => {
+      module.imageEnhancer.addEventListener("statuschange", handleTaskStatus);
+      return module;
+    });
+  }
+  return enhancerModulePromise;
+}
+
+async function handleTaskStatus({ detail }) {
   if (detail.id !== currentTaskId) return;
 
   setStatus(detail.status, detail.progress);
@@ -306,6 +321,7 @@ imageEnhancer.addEventListener("statuschange", async ({ detail }) => {
   }
 
   if (detail.status === "done") {
+    const { imageEnhancer } = await loadEnhancer();
     resultUrl = URL.createObjectURL(imageEnhancer.getResult(detail.id));
     const download = document.querySelector("#download");
     document.querySelector("#after").src = resultUrl;
@@ -324,4 +340,4 @@ imageEnhancer.addEventListener("statuschange", async ({ detail }) => {
   }
 
   if (detail.status === "cancelled") setCancelEnabled(false);
-});
+}

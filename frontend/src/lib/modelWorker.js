@@ -1,6 +1,10 @@
 const LATEST_MODEL_URL = "/api/checkpoint/latest";
 const ORT_SCRIPT_URL = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.25.1/dist/ort.wasm.min.js";
-const ORT_WASM_PATH = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.25.1/dist/";
+const ORT_WASM_BASE = new URL("./", self.location.href).href;
+const ORT_WASM_PATHS = {
+  "ort-wasm-simd-threaded.mjs": `${ORT_WASM_BASE}ort-wasm-simd-threaded.mjs`,
+  "ort-wasm-simd-threaded.wasm": `${ORT_WASM_BASE}ort-wasm-simd-threaded.wasm`
+};
 
 let checkpointPromise;
 let sessionPromise;
@@ -47,7 +51,7 @@ async function getSession() {
       const checkpoint = await getCheckpoint();
       const ort = self.ort;
       ort.env.logLevel = "fatal";
-      ort.env.wasm.wasmPaths = ORT_WASM_PATH;
+      ort.env.wasm.wasmPaths = ORT_WASM_PATHS;
       ort.env.wasm.numThreads = 1;
 
       const session = await ort.InferenceSession.create(checkpoint.bytes, {
