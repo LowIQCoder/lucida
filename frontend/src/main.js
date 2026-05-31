@@ -263,7 +263,7 @@ async function processFile(file) {
     return;
   }
 
-  if (currentTaskId) imageEnhancer.cancel(currentTaskId);
+  if (currentTaskId) safeCancel(imageEnhancer, currentTaskId);
   resetUi();
   originalUrl = await makePreviewUrl(file);
   if (signal.aborted) {
@@ -283,7 +283,9 @@ async function processFile(file) {
 function handleCancel() {
   if (!currentTaskId) return;
   currentAbort?.abort();
-  loadEnhancer().then(({ imageEnhancer }) => imageEnhancer.cancel(currentTaskId));
+  const id = currentTaskId;
+  currentTaskId = undefined;
+  loadEnhancer().then(({ imageEnhancer }) => safeCancel(imageEnhancer, id));
 }
 
 function isAcceptedFile(file) {
@@ -345,6 +347,14 @@ function cacheEnhanceUi() {
   };
 }
 
+function safeCancel(imageEnhancer, id) {
+  try {
+    imageEnhancer.cancel(id);
+  } catch {
+    imageEnhancer.release(id);
+  }
+}
+
 async function makePreviewUrl(file, maxSide = 1200) {
   try {
     const bitmap = await createImageBitmap(file);
@@ -392,6 +402,7 @@ async function handleTaskStatus({ detail }) {
     const { imageEnhancer } = await loadEnhancer();
     resultUrl = URL.createObjectURL(imageEnhancer.getResult(detail.id));
     imageEnhancer.release(detail.id);
+    currentTaskId = undefined;
     if (ui.after) ui.after.src = resultUrl;
     if (ui.download) {
       ui.download.href = resultUrl;
@@ -404,10 +415,14 @@ async function handleTaskStatus({ detail }) {
   }
 
   if (detail.status === "failed") {
+    currentTaskId = undefined;
     if (ui.status) ui.status.textContent = detail.error || "failed";
     setCancelEnabled(false);
     return;
   }
 
-  if (detail.status === "cancelled") setCancelEnabled(false);
+  if (detail.status === "cancelled") {
+    currentTaskId = undefined;
+    setCancelEnabled(false);
+  }
 }
