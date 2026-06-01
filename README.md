@@ -56,8 +56,9 @@ The model does not generate pixels. This keeps inference small and lets the brow
 
 ## Dataset
 
-- 2,000 source images from WikiMediaAPI.
-- 10,000 processed samples.
+- 10,000 source images from WikiMediaAPI.
+- 40,000 processed samples.
+- Various forms of distortion: rotation, flips and parameters altering.
 - Mix: original, small corruption, high corruption.
 
 | Small corruption | Medium corruption | High corruption |
