@@ -76,9 +76,9 @@ dvc remote modify gdrive gdrive_acknowledge_abuse true
 dvc remote modify gdrive --local gdrive_service_account_json_file_path path/to/file.json.
 ```
 
-And pull all data
+And pull latest model
 ```bash
-dvc pull .\ml\models\
+dvc pull .\ml\models\model_03
 ```
 
 Now create `.env` from `.env.example`, then run:
